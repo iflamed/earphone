@@ -1,0 +1,45 @@
+<resources>
+    <!--Global -->
+    <string name="app_name">OPUS解码工具</string>
+    <string name="app_version">应用版本</string>
+
+    <!--Dialog-->
+    <string name="title">标题</string>
+    <string name="cancel">取消</string>
+    <string name="confirm">确定</string>
+
+    <!--Resource-->
+    <string name="sync_resource_failed">同步测试资源失败</string>
+    <string name="sync_resource_success">同步测试资源成功</string>
+    <string name="store_file_tips">请把文件存放到文件夹</string>
+
+    <!--Opus Decoding-->
+    <string name="opus_decoding">OPUS解码</string>
+    <string name="decode">解码</string>
+    <string name="output">输出</string>
+    <string name="start_decoding">开始解码</string>
+    <string name="stop_decoding">停止解码</string>
+    <string name="audio_play">播放音频</string>
+    <string name="audio_pause">暂停播放</string>
+    <string name="select_file">选择文件</string>
+    <string name="decode_param">解码参数</string>
+    <string name="audio_sample_rate">采样率</string>
+    <string name="whether_has_headers">是否携带协议头</string>
+    <string name="packet_len">数据包长度</string>
+    <string name="channel_num">通道数量</string>
+    <string name="single_channel">单通道</string>
+    <string name="dual_channel">双通道</string>
+    <string name="decode_way">解码方式</string>
+    <string name="way_data_stream">数据流</string>
+    <string name="way_file">文件</string>
+    <string name="whether_play_audio">是否播放音频</string>
+    <string name="select_file_tips">至少选择一个测试文件</string>
+    <string name="decoding">正在解码</string>
+    <string name="play_param">播放参数</string>
+    <string name="decoding_fail">解码失败</string>
+    <string name="encode_param">编码参数</string>
+    <string name="start_coding">开始编码</string>
+    <string name="stop_coding">停止编码</string>
+    <string name="encoding">正在编码</string>
+    
+</resources>

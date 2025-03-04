@@ -1,0 +1,46 @@
+<resources>
+    <!--Global -->
+    <string name="app_name">OpusTestTool</string>
+    <string name="app_version">Application Version</string>
+
+    <!--Dialog-->
+    <string name="title">Title</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Sure</string>
+
+    <string name="sync_resource_failed">Failed to synchronize test resources</string>
+    <string name="sync_resource_success">Successfully synchronized test resources</string>
+    <string name="store_file_tips">Please store the files in a folder</string>
+
+    <!--Opus Decoding-->
+    <string name="opus_decoding">OPUS Decoding</string>
+    <string name="decode">Decode</string>
+    <string name="output">Output</string>
+    <string name="start_decoding">Start Decoding</string>
+    <string name="stop_decoding">Stop Decoding</string>
+    <string name="audio_play">Play Audio</string>
+    <string name="audio_pause">Pause Audio</string>
+    <string name="select_file">Select File</string>
+    <string name="decode_param">Decoding Parameters</string>
+    <string name="audio_sample_rate">Sampling Rate</string>
+    <string name="whether_has_headers">Whether to carry protocol headers</string>
+    <string name="packet_len">Packet Length</string>
+    <string name="channel_num">Channel Number</string>
+    <string name="single_channel">Single Channel</string>
+    <string name="dual_channel">Dual Channel</string>
+    <string name="decode_way">Decoding Method</string>
+    <string name="way_data_stream">Data Stream</string>
+    <string name="way_file">File</string>
+    <string name="whether_play_audio">Whether to play audio</string>
+    <string name="select_file_tips">Select at least one test file</string>
+    <string name="decoding">Decoding</string>
+    <string name="play_param">Play Parameters</string>
+    <string name="decoding_fail">Decoding Failed</string>
+    <string name="encode_param">Encode Parameters</string>
+    <string name="start_coding">Start Coding</string>
+    <string name="stop_coding">Stop Coding</string>
+    <string name="encoding">Encoding</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+</resources>
