@@ -2,7 +2,7 @@ package com.jieli.opus.ui;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
+import android.widget.Button;
 
 import com.jieli.component.utils.SystemUtil;
 import com.jieli.opus.R;
@@ -22,9 +22,10 @@ public class MainActivity extends BaseActivity {
         setContentView(mMainBinding.getRoot());
 
         replaceFragment(R.id.fl_content, OpusFragment.class.getCanonicalName(), null);
-        findViewById(R.id.btn_bluetooth_spp).setOnClickListener(view -> {
-            Intent it = new Intent(view.getContext(), BluetoothSppActivity.class);
-            startActivity(it);
+        Button btnBluetoothTest = findViewById(R.id.btnBluetoothTest);
+        btnBluetoothTest.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, BluetoothTestActivity.class);
+            startActivity(intent);
         });
     }
 
