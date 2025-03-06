@@ -269,8 +269,8 @@ public class BluetoothTestActivity extends AppCompatActivity implements Bluetoot
         int channelConfig = option.getChannel() == 2 ? AudioFormat.CHANNEL_OUT_STEREO : AudioFormat.CHANNEL_OUT_MONO;
         int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT);
         mAudioTrack = new AudioTrack(new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build(),
                 new AudioFormat.Builder()
                         .setSampleRate(sampleRate)
@@ -309,39 +309,31 @@ public class BluetoothTestActivity extends AppCompatActivity implements Bluetoot
         OpusConfiguration opsCfg = new OpusConfiguration().setHasHead(false).setPacketSize(40)
                 .setSampleRate(OpusConfiguration.SAMPLE_RATE_16k).setChannel(OpusConfiguration.CHANNEL_MONO);
         OpusParam param = new OpusParam(opsCfg)
-                .setWay(OpusParam.WAY_STREAM).setPlayAudio(true);
+                .setWay(OpusParam.WAY_STREAM).setPlayAudio(false);
 
         final OnDecodeStreamCallback callback = new OnDecodeStreamCallback() {
             @Override
             public void onDecodeStream(byte[] data) {
-                JL_Log.d(TAG,"decodeOpusStream", "onDecodeStream ---> " + data.length);
-                if (param.isPlayAudio()) {
-                    writeAudioData(data);
-                }
+                // JL_Log.d(TAG,"decodeOpusStream", "onDecodeStream ---> " + data.length);
+                writeAudioData(data);
             }
 
             @Override
             public void onStart() {
                 JL_Log.i(TAG,"decodeOpusStream", "onStart");
-                if (param.isPlayAudio()) {
-                    playAudioPrepare(param.getOption());
-                }
+                playAudioPrepare(param.getOption());
             }
 
             @Override
             public void onComplete(String outFilePath) {
                 JL_Log.d(TAG, "decodeOpusStream", "onComplete : " + outFilePath);
-                if (param.isPlayAudio()) {
-                    stopAudioPlay();
-                }
+                stopAudioPlay();
             }
 
             @Override
             public void onError(int code, String message) {
                 JL_Log.w(TAG, "decodeOpusStream", "onError : " + code + ", " + message);
-                if (param.isPlayAudio()) {
-                    stopAudioPlay();
-                }
+                stopAudioPlay();
             }
         };
         mOpusManager.startDecodeStream(new OpusOption().setHasHead(param.getOption().isHasHead())
@@ -355,6 +347,7 @@ public class BluetoothTestActivity extends AppCompatActivity implements Bluetoot
         // 发送音频程序
         writeFileData(data);
         mOpusManager.writeAudioStream(data);
+        // Log.d(TAG, "onDataReceived: " + encodeHexString(data));
 
         // String receivedText = new String(data);
         // String currentText = dataReceivedTextView.getText().toString();
@@ -365,6 +358,21 @@ public class BluetoothTestActivity extends AppCompatActivity implements Bluetoot
         // }
         //
         // dataReceivedTextView.setText(currentText + receivedText);
+    }
+
+    public String encodeHexString(byte[] byteArray) {
+        StringBuffer hexStringBuffer = new StringBuffer();
+        for (int i = 0; i < byteArray.length; i++) {
+            hexStringBuffer.append(byteToHex(byteArray[i]));
+        }
+        return hexStringBuffer.toString();
+    }
+
+    public String byteToHex(byte num) {
+        char[] hexDigits = new char[2];
+        hexDigits[0] = Character.forDigit((num >> 4) & 0xF, 16);
+        hexDigits[1] = Character.forDigit((num & 0xF), 16);
+        return new String(hexDigits);
     }
 
     private void createFileStream(String filePath) {
