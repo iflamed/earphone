@@ -314,7 +314,7 @@ public class BluetoothTestActivity extends AppCompatActivity implements Bluetoot
         final OnDecodeStreamCallback callback = new OnDecodeStreamCallback() {
             @Override
             public void onDecodeStream(byte[] data) {
-                // JL_Log.d(TAG,"decodeOpusStream", "onDecodeStream ---> " + data.length);
+                JL_Log.d(TAG,"decodeOpusStream", "onDecodeStream ---> " + data.length);
                 writeAudioData(data);
             }
 
@@ -347,7 +347,7 @@ public class BluetoothTestActivity extends AppCompatActivity implements Bluetoot
         // 发送音频程序
         writeFileData(data);
         mOpusManager.writeAudioStream(data);
-        // Log.d(TAG, "onDataReceived: " + encodeHexString(data));
+        Log.d(TAG, "onDataReceived: " + encodeHexString(data) + "\n");
 
         // String receivedText = new String(data);
         // String currentText = dataReceivedTextView.getText().toString();

@@ -182,8 +182,8 @@ public class BluetoothSppManager {
     private class ReadThread extends Thread {
         @Override
         public void run() {
-            // 默认每次读取1024字节，适配蓝牙耳机SPP数据流改成40
-            byte[] buffer = new byte[120];
+            // 默认每次读取1024字节，适配蓝牙耳机SPP数据流改成200
+            byte[] buffer = new byte[200];
             int bytes;
 
             while (isConnected) {
