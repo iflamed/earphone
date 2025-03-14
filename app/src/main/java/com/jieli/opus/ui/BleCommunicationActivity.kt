@@ -15,6 +15,10 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -30,11 +34,23 @@ import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.NonNull
 import androidx.annotation.RequiresPermission
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.jieli.jl_audio_decode.callback.OnDecodeStreamCallback
+import com.jieli.jl_audio_decode.exceptions.OpusException
+import com.jieli.jl_audio_decode.opus.OpusManager
+import com.jieli.jl_audio_decode.opus.model.OpusOption
+import com.jieli.logcat.JL_Log
 import com.jieli.opus.R
+import com.jieli.opus.data.model.opus.OpusConfiguration
+import com.jieli.opus.data.model.opus.OpusParam
+import com.jieli.opus.tool.AppUtil
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
 
@@ -52,6 +68,12 @@ class BleCommunicationActivity : AppCompatActivity() {
     private var isFileTransferring = false
     private var isScanning = false
     private var isNotificationsEnabled = false
+    private var isAudioStreamingEnabled = false
+    
+    // 音频相关
+    private var mOpusManager: OpusManager? = null
+    private var mAudioTrack: AudioTrack? = null
+    private var foutStream: FileOutputStream? = null
 
     // 用于通知的UUID
     private val CLIENT_CHARACTERISTIC_CONFIG = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
@@ -194,10 +216,18 @@ class BleCommunicationActivity : AppCompatActivity() {
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic
         ) {
-            handler.post {
-                val value = characteristic.value
-                val result = String(value)
-                findViewById<TextView>(R.id.tv_command_result).text = "指令结果: $result"
+            val value = characteristic.value
+            Log.d(tag, "onCharacteristicChanged: $value")
+            
+            if (isAudioStreamingEnabled && characteristic == selectedCharacteristic) {
+                // 处理音频数据
+                processAudioData(value)
+            } else {
+                // 处理普通命令响应
+                handler.post {
+                    val result = String(value)
+                    findViewById<TextView>(R.id.tv_command_result).text = "指令结果: $result"
+                }
             }
         }
         
@@ -269,7 +299,177 @@ class BleCommunicationActivity : AppCompatActivity() {
         setupDeviceSpinner()
         setupSpinners()
         setupButtons()
+        setupOpusManager()
         checkPermissions()
+    }
+    
+    /**
+     * 初始化OpusManager
+     */
+    private fun setupOpusManager() {
+        try {
+            mOpusManager = OpusManager()
+        } catch (e: OpusException) {
+            JL_Log.w(tag, "初始化OpusManager失败: $e")
+            mOpusManager = null
+        }
+    }
+    
+    /**
+     * 处理接收到的音频数据
+     */
+    private fun processAudioData(data: ByteArray) {
+        // 写入文件
+        writeFileData(data)
+        // 发送到OpusManager解码
+        mOpusManager?.writeAudioStream(data)
+        Log.d(tag, "接收音频数据: ${data.size} 字节")
+    }
+    
+    /**
+     * 开始音频流解码
+     */
+    private fun startAudioStreamDecode() {
+        val dt = "${System.currentTimeMillis()}"
+        val outFilePath = AppUtil.getOpusFileDirPath(this) + File.separator + "ble_audio_$dt.opus"
+        createFileStream(outFilePath)
+        
+        // 配置Opus解码参数
+        val opusCfg = OpusConfiguration().setHasHead(false).setPacketSize(40)
+            .setSampleRate(OpusConfiguration.SAMPLE_RATE_16k).setChannel(OpusConfiguration.CHANNEL_MONO)
+        val param = OpusParam(opusCfg)
+            .setWay(OpusParam.WAY_STREAM).setPlayAudio(false)
+
+        val callback = object : OnDecodeStreamCallback {
+            override fun onDecodeStream(data: ByteArray) {
+                JL_Log.d(tag, "decodeOpusStream", "onDecodeStream ---> ${data.size}")
+                writeAudioData(data)
+            }
+
+            override fun onStart() {
+                JL_Log.i(tag, "decodeOpusStream", "onStart")
+                playAudioPrepare(param.option)
+            }
+
+            override fun onComplete(outFilePath: String) {
+                JL_Log.d(tag, "decodeOpusStream", "onComplete : $outFilePath")
+                stopAudioPlay()
+            }
+
+            override fun onError(code: Int, message: String) {
+                JL_Log.w(tag, "decodeOpusStream", "onError : $code, $message")
+                stopAudioPlay()
+            }
+        }
+        
+        mOpusManager?.startDecodeStream(OpusOption().setHasHead(param.option.isHasHead)
+            .setChannel(param.option.channel)
+            .setSampleRate(param.option.sampleRate)
+            .setPacketSize(param.option.packetSize), callback)
+    }
+    
+    /**
+     * 准备音频播放器
+     */
+    private fun playAudioPrepare(@NonNull option: OpusConfiguration) {
+        releaseAudioPlayer()
+        val sampleRate = option.sampleRate
+        val channelConfig = if (option.channel == 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
+        val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT)
+        
+        mAudioTrack = AudioTrack(AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build(),
+            AudioFormat.Builder()
+                .setSampleRate(sampleRate)
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setChannelMask(channelConfig)
+                .build(),
+            minBufferSize, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
+        
+        if (mAudioTrack?.state == AudioTrack.STATE_UNINITIALIZED) {
+            JL_Log.w(tag, "AudioTrack初始化失败")
+            stopAudioPlay()
+            return
+        }
+        mAudioTrack?.play()
+    }
+    
+    /**
+     * 写入音频数据到播放器
+     */
+    private fun writeAudioData(data: ByteArray) {
+        mAudioTrack?.write(data, 0, data.size)
+    }
+    
+    /**
+     * 是否正在播放音频
+     */
+    private fun isPlayAudio(): Boolean {
+        return mAudioTrack != null && mAudioTrack?.playState == AudioTrack.PLAYSTATE_PLAYING
+    }
+    
+    /**
+     * 停止音频播放
+     */
+    private fun stopAudioPlay() {
+        if (mAudioTrack == null) return
+        if (isPlayAudio()) {
+            mAudioTrack?.stop()
+        }
+        Log.d(tag, "stopAudioPlay: 已停止")
+    }
+    
+    /**
+     * 释放音频播放器
+     */
+    private fun releaseAudioPlayer() {
+        if (mAudioTrack == null) return
+        stopAudioPlay()
+        mAudioTrack?.release()
+        mAudioTrack = null
+    }
+    
+    /**
+     * 创建文件流
+     */
+    private fun createFileStream(filePath: String) {
+        closeFileStream()
+        try {
+            foutStream = FileOutputStream(filePath)
+        } catch (e: FileNotFoundException) {
+            e.printStackTrace()
+        }
+    }
+    
+    /**
+     * 写入文件数据
+     */
+    private fun writeFileData(data: ByteArray): Boolean {
+        if (foutStream == null) return false
+        try {
+            foutStream?.write(data, 0, data.size)
+            return true
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+        return false
+    }
+    
+    /**
+     * 关闭文件流
+     */
+    private fun closeFileStream() {
+        if (foutStream == null) return
+        try {
+            Log.d(tag, "closeFileStream: 关闭文件流")
+            foutStream?.close()
+        } catch (e: IOException) {
+            Log.e(tag, "closeFileStream: ", e)
+        } finally {
+            foutStream = null
+        }
     }
 
     private fun setupBluetooth() {
@@ -648,6 +848,33 @@ class BleCommunicationActivity : AppCompatActivity() {
                 
                 bluetoothGatt?.writeDescriptor(descriptor)
                 Log.d(tag, "设置特征通知状态: ${!isNotificationsEnabled}")
+                
+                // 更新通知状态
+                val newNotificationState = !isNotificationsEnabled
+                isNotificationsEnabled = newNotificationState
+                
+                // 如果开启通知，并且是音频流模式，则启动音频解码
+                if (newNotificationState) {
+                    // 询问用户是否为音频流
+                    if (askUserIfAudioStream()) {
+                        isAudioStreamingEnabled = true
+                        startAudioStreamDecode()
+                        Toast.makeText(this, "已开启音频流接收模式", Toast.LENGTH_SHORT).show()
+                        findViewById<Button>(R.id.btn_toggle_notification).text = "关闭音频流"
+                    } else {
+                        isAudioStreamingEnabled = false
+                        findViewById<Button>(R.id.btn_toggle_notification).text = "关闭通知"
+                    }
+                } else {
+                    // 关闭音频流
+                    if (isAudioStreamingEnabled) {
+                        isAudioStreamingEnabled = false
+                        stopAudioPlay()
+                        closeFileStream()
+                        Toast.makeText(this, "已关闭音频流接收", Toast.LENGTH_SHORT).show()
+                    }
+                    findViewById<Button>(R.id.btn_toggle_notification).text = "开启通知"
+                }
             } else {
                 Toast.makeText(this, "无法找到通知描述符", Toast.LENGTH_SHORT).show()
             }
@@ -656,6 +883,15 @@ class BleCommunicationActivity : AppCompatActivity() {
             Toast.makeText(this, "设置通知状态失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
+    
+    /**
+     * 询问用户是否为音频流
+     */
+    private fun askUserIfAudioStream(): Boolean {
+        // 这里简化处理，实际应用中可以使用对话框询问用户
+        return true
+    }
+
 
     private fun sendFile() {
         if (selectedFile == null) {
@@ -813,7 +1049,11 @@ class BleCommunicationActivity : AppCompatActivity() {
                     properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
             notifyButton.isEnabled = canNotify
             notifyButton.alpha = if (canNotify) 1.0f else 0.5f
-            notifyButton.text = if (isNotificationsEnabled) "关闭通知" else "开启通知"
+            notifyButton.text = when {
+                isNotificationsEnabled && isAudioStreamingEnabled -> "关闭音频流"
+                isNotificationsEnabled -> "关闭通知"
+                else -> "开启通知"
+            }
             
             // 更新写按钮可用性
             val canWrite = properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0 ||
@@ -873,6 +1113,11 @@ class BleCommunicationActivity : AppCompatActivity() {
         super.onDestroy()
         // 停止扫描
         stopScan()
+        
+        // 关闭音频相关资源
+        stopAudioPlay()
+        releaseAudioPlayer()
+        closeFileStream()
         
         // 关闭GATT连接
         if (ActivityCompat.checkSelfPermission(this,
