@@ -22,9 +22,14 @@ public class MainActivity extends BaseActivity {
         setContentView(mMainBinding.getRoot());
 
         replaceFragment(R.id.fl_content, OpusFragment.class.getCanonicalName(), null);
-        Button btnBluetoothTest = findViewById(R.id.btnBluetoothTest);
+        Button btnBluetoothTest = findViewById(R.id.btn_bluetooth_spp);
         btnBluetoothTest.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, BluetoothTestActivity.class);
+            startActivity(intent);
+        });
+        Button btnBluetoothBleTest = findViewById(R.id.btn_ble_communication);
+        btnBluetoothBleTest.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, BleCommunicationActivity.class);
             startActivity(intent);
         });
     }
