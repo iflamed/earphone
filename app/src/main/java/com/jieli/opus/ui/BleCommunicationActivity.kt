@@ -66,7 +66,6 @@ class BleCommunicationActivity : AppCompatActivity() {
     private val devices = ArrayList<BluetoothDevice>()
     private var deviceNamesWithAddress = ArrayList<String>()
     private var selectedDevicePosition = -1
-    private var selectedFile: Uri? = null
     private var currentMtu = 23
     private var isFileTransferring = false
     private var isScanning = false
@@ -90,6 +89,7 @@ class BleCommunicationActivity : AppCompatActivity() {
 
     private val requestFilePick = 1001
     private val requestEnableBt = 1002
+    private val testAudio = "test.opus"
 
     private val scanCallback = object : ScanCallback() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -155,6 +155,7 @@ class BleCommunicationActivity : AppCompatActivity() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    Log.d(tag, "onConnectionStateChange: bluetooth_connect connected")
                     handler.post {
                         Toast.makeText(
                             this@BleCommunicationActivity,
@@ -174,6 +175,7 @@ class BleCommunicationActivity : AppCompatActivity() {
                 }
 
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    Log.d(tag, "onConnectionStateChange: bluetooth_connect disconnected")
                     handler.post {
                         Toast.makeText(
                             this@BleCommunicationActivity,
@@ -260,17 +262,9 @@ class BleCommunicationActivity : AppCompatActivity() {
         ) {
             handler.post {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    Toast.makeText(
-                        this@BleCommunicationActivity,
-                        "写入成功",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Log.d(tag, "onCharacteristicWrite: 写入成功")
                 } else {
-                    Toast.makeText(
-                        this@BleCommunicationActivity,
-                        "写入失败: $status",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Log.e(tag, "onCharacteristicWrite: 写入失败")
                 }
             }
         }
@@ -424,7 +418,7 @@ class BleCommunicationActivity : AppCompatActivity() {
     }
 
     private fun playAudioFile() {
-        val inFilePath = AppUtil.getOpusFileDirPath(this) + File.separator + "test.opus"
+        val inFilePath = AppUtil.getOpusFileDirPath(this) + File.separator + testAudio
         startAudioStreamDecode(false)
         writeOpusDataHandle(inFilePath, 50)
     }
@@ -648,10 +642,6 @@ class BleCommunicationActivity : AppCompatActivity() {
             sendCommand()
         }
 
-        findViewById<Button>(R.id.btn_select_file).setOnClickListener {
-            openFilePicker()
-        }
-
         findViewById<Button>(R.id.btn_send_file).setOnClickListener {
             sendFile()
         }
@@ -664,16 +654,6 @@ class BleCommunicationActivity : AppCompatActivity() {
         // 添加开启/关闭通知按钮
         findViewById<Button>(R.id.btn_toggle_notification).setOnClickListener {
             toggleNotification()
-        }
-    }
-
-    private fun openFilePicker() {
-        val intent = Intent(Intent.ACTION_GET_CONTENT)
-        intent.type = "*/*"
-        try {
-            startActivityForResult(Intent.createChooser(intent, "选择文件"), requestFilePick)
-        } catch (ex: android.content.ActivityNotFoundException) {
-            Toast.makeText(this, "请安装文件管理器", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -837,7 +817,11 @@ class BleCommunicationActivity : AppCompatActivity() {
             bluetoothGatt?.close()
 
             Log.d(tag, "连接设备: ${device.address}")
-            bluetoothGatt = device.connectGatt(this, false, gattCallback)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                bluetoothGatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            } else {
+                bluetoothGatt = device.connectGatt(this, false, gattCallback)
+            }
             Toast.makeText(this, "正在连接设备...", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(tag, "连接设备失败: ${e.message}")
@@ -1027,10 +1011,6 @@ class BleCommunicationActivity : AppCompatActivity() {
 
 
     private fun sendFile() {
-        if (selectedFile == null) {
-            Toast.makeText(this, "请先选择文件", Toast.LENGTH_SHORT).show()
-            return
-        }
 
         if (isFileTransferring) {
             Toast.makeText(this, "文件正在传输中", Toast.LENGTH_SHORT).show()
@@ -1045,9 +1025,10 @@ class BleCommunicationActivity : AppCompatActivity() {
         Thread {
             try {
                 isFileTransferring = true
-                val inputStream = contentResolver.openInputStream(selectedFile!!)
-                val fileSize =
-                    contentResolver.openFileDescriptor(selectedFile!!, "r")?.statSize ?: 0
+                val inFilePath = AppUtil.getOpusFileDirPath(this) + File.separator + testAudio
+                val file = File(inFilePath)
+                val inputStream = FileInputStream(inFilePath)
+                val fileSize = file.length()
                 var bytesSent = 0L
                 val buffer = ByteArray(currentMtu - 3) // 预留3字节用于ATT头部
 
@@ -1063,7 +1044,7 @@ class BleCommunicationActivity : AppCompatActivity() {
                     if (bytesRead == -1) break
 
                     selectedCharacteristic?.value = buffer.copyOf(bytesRead)
-                    if (ActivityCompat.checkSelfPermission(
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ActivityCompat.checkSelfPermission(
                             this,
                             Manifest.permission.BLUETOOTH_CONNECT
                         ) != PackageManager.PERMISSION_GRANTED
@@ -1071,10 +1052,16 @@ class BleCommunicationActivity : AppCompatActivity() {
                         Log.d(tag, "sendFile: no BLUETOOTH_CONNECT permission")
                         break
                     }
-                    bluetoothGatt?.writeCharacteristic(selectedCharacteristic)
+                    if (selectedCharacteristic != null) {
+                        bluetoothGatt?.writeCharacteristic(selectedCharacteristic)
+                    } else {
+                        Log.d(tag, "sendFile: bluetooth gatt disconnected")
+                        break
+                    }
 
                     bytesSent += bytesRead
                     val progress = (bytesSent * 100 / fileSize).toInt()
+                    Log.d(tag, "sendFile: progress $progress")
                     handler.post {
                         findViewById<ProgressBar>(R.id.progress_bar).progress = progress
                         findViewById<TextView>(R.id.tv_file_progress).text = "文件进度: $progress%"
@@ -1088,7 +1075,7 @@ class BleCommunicationActivity : AppCompatActivity() {
                     Toast.makeText(this, "文件发送完成", Toast.LENGTH_SHORT).show()
                     findViewById<ProgressBar>(R.id.progress_bar).visibility = View.GONE
                 }
-            } catch (e: IOException) {
+            } catch (e: Exception) {
                 Log.e(tag, "文件发送失败: ${e.message}")
                 handler.post {
                     Toast.makeText(this, "文件发送失败: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -1217,28 +1204,6 @@ class BleCommunicationActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tv_characteristic_properties).text = ""
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        when (requestCode) {
-            requestFilePick -> {
-                if (resultCode == RESULT_OK && data != null) {
-                    selectedFile = data.data
-                    Toast.makeText(this, "已选择文件", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            requestEnableBt -> {
-                if (resultCode == RESULT_OK) {
-                    // 蓝牙已启用
-                    scanDevices()
-                } else {
-                    Toast.makeText(this, "蓝牙未开启，无法使用BLE功能", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-            }
-        }
-    }
-
     override fun onPause() {
         super.onPause()
         // 停止扫描以节省电量
@@ -1249,7 +1214,7 @@ class BleCommunicationActivity : AppCompatActivity() {
         super.onDestroy()
         // 停止扫描
         stopScan()
-
+        disconnectFromDevice()
         // 关闭音频相关资源
         stopAudioPlay()
         releaseAudioPlayer()
