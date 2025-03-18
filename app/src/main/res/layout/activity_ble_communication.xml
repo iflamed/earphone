@@ -106,12 +106,17 @@
 
                 <Spinner
                     android:id="@+id/spinner_services"
-                    android:layout_width="160dp"
+                    android:layout_width="110dp"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp" />
 
                 <Spinner
                     android:id="@+id/spinner_characteristics"
+                    android:layout_width="160dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" />
+                <Spinner
+                    android:id="@+id/send_spinner_characteristics"
                     android:layout_width="160dp"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp" />

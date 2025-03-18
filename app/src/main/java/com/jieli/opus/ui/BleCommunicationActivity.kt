@@ -849,8 +849,9 @@ class BleCommunicationActivity : AppCompatActivity() {
         }
 
         try {
+            //todo 客户端只能接受40字节，否则音频会乱
             Log.d(tag, "请求MTU: 512")
-            bluetoothGatt?.requestMtu(512)
+            bluetoothGatt?.requestMtu(43)
         } catch (e: Exception) {
             Log.e(tag, "请求MTU失败: ${e.message}")
             Toast.makeText(this, "请求MTU失败: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -1009,6 +1010,22 @@ class BleCommunicationActivity : AppCompatActivity() {
         return true
     }
 
+    private fun sendByte(data: ByteArray) {
+        selectedCharacteristic?.value = data
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.d(tag, "sendFile: no BLUETOOTH_CONNECT permission")
+        }
+        if (selectedCharacteristic != null) {
+            bluetoothGatt?.writeCharacteristic(selectedCharacteristic)
+            Log.d(tag, "sendByte: send success, length " + data.size)
+        } else {
+            Log.d(tag, "sendFile: bluetooth gatt disconnected")
+        }
+    }
 
     private fun sendFile() {
 
@@ -1030,7 +1047,9 @@ class BleCommunicationActivity : AppCompatActivity() {
                 val inputStream = FileInputStream(inFilePath)
                 val fileSize = file.length()
                 var bytesSent = 0L
+                // todo 端侧蓝牙测试的时候只能接受40字节
                 val buffer = ByteArray(currentMtu - 3) // 预留3字节用于ATT头部
+                var count:UShort = 0u
 
                 handler.post {
                     findViewById<ProgressBar>(R.id.progress_bar).apply {
@@ -1043,7 +1062,6 @@ class BleCommunicationActivity : AppCompatActivity() {
                     val bytesRead = inputStream?.read(buffer) ?: -1
                     if (bytesRead == -1) break
 
-                    selectedCharacteristic?.value = buffer.copyOf(bytesRead)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ActivityCompat.checkSelfPermission(
                             this,
                             Manifest.permission.BLUETOOTH_CONNECT
@@ -1052,8 +1070,19 @@ class BleCommunicationActivity : AppCompatActivity() {
                         Log.d(tag, "sendFile: no BLUETOOTH_CONNECT permission")
                         break
                     }
+                    val countBuffer: ByteArray = count.toByteArray()
+                    val value = buffer.copyOf(bytesRead)
+                    // val value = countBuffer + buffer.copyOf(bytesRead)
+                    Log.d(tag, "sendFile: value ${value.size} of  ${value.toHexString()}")
                     if (selectedCharacteristic != null) {
-                        bluetoothGatt?.writeCharacteristic(selectedCharacteristic)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            bluetoothGatt?.writeCharacteristic(selectedCharacteristic!!, value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+                        } else {
+                            selectedCharacteristic?.value = value
+                            selectedCharacteristic?.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                            bluetoothGatt?.writeCharacteristic(selectedCharacteristic)
+                        }
+                        count++
                     } else {
                         Log.d(tag, "sendFile: bluetooth gatt disconnected")
                         break
@@ -1067,7 +1096,8 @@ class BleCommunicationActivity : AppCompatActivity() {
                         findViewById<TextView>(R.id.tv_file_progress).text = "文件进度: $progress%"
                     }
 
-                    Thread.sleep(50) // 添加延迟以避免发送过快
+                    // todo 发送太快可能丢包
+                    Thread.sleep(20) // 添加延迟以避免发送过快
                 }
 
                 inputStream?.close()
@@ -1289,4 +1319,19 @@ class BleCommunicationActivity : AppCompatActivity() {
             Toast.makeText(this, "断开设备连接失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
+}
+
+private fun ByteArray.toHexString(): String {
+    val stringBuilder = StringBuilder(this.size)
+    for (byteChar in this) {
+        stringBuilder.append(String.format("%02X ", byteChar))
+    }
+    return stringBuilder.toString()
+}
+fun UShort.toByteArray(): ByteArray {
+    val value = this.toInt()
+    val bytes = ByteArray(2)
+    bytes[0] = (value and 0xFF).toByte()
+    bytes[1] = ((value ushr 8) and 0xFF).toByte()
+    return bytes
 }
