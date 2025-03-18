@@ -13,6 +13,7 @@ import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
@@ -97,6 +98,7 @@ class BleCommunicationActivity : AppCompatActivity() {
             super.onScanResult(callbackType, result)
             val device = result.device
 
+            Log.d(tag, "onScanResult: ${device.address} ${device.name}")
             // 检查设备名称是否为null并且设备是否已经在列表中
             if (!devices.contains(device) && device.name != null) {
                 // 使用UI线程更新列表，避免潜在的并发问题
@@ -1097,7 +1099,7 @@ class BleCommunicationActivity : AppCompatActivity() {
                     }
 
                     // todo 发送太快可能丢包
-                    Thread.sleep(20) // 添加延迟以避免发送过快
+                    Thread.sleep(50) // 添加延迟以避免发送过快
                 }
 
                 inputStream?.close()
